@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	api "github.com/capsule8/capsule8/api/v0"
@@ -65,6 +66,9 @@ type Sensor struct {
 	// caching process information
 	monitor *perf.EventMonitor
 
+	// A pool to re-use Event objects
+	eventPool *sync.Pool
+
 	// Per-sensor caches and monitors
 	containerCache *containerCache
 	processCache   ProcessInfoCache
@@ -94,6 +98,12 @@ func NewSensor() (*Sensor, error) {
 		ID:                sensorID,
 		bootMonotimeNanos: bootMonotimeNanos,
 		eventMap:          newSafeSubscriptionMap(),
+	}
+
+	s.eventPool = &sync.Pool{
+		New: func() interface{} {
+			return &api.TelemetryEvent{}
+		},
 	}
 
 	return s, nil
@@ -181,6 +191,47 @@ func (s *Sensor) Stop() {
 	}
 }
 
+// Event is an envelope around a telemetry event. It is the type that is
+// passed through to a subscription's data channel.
+type Event struct {
+	// Event is the telemetry event
+	Event *api.TelemetryEvent
+
+	// reusable is true if the event was sent to a single data channel
+	reusable bool
+}
+
+// DiscardEvent discards an event after it has been delivered to a
+// subscription's data channel. It should be called by the receiver of the
+// event when it is no longer needed.
+func (s *Sensor) DiscardEvent(event Event) {
+	if event.reusable {
+		s.discardTelemetryEvent(event.Event)
+	}
+}
+
+func (s *Sensor) discardTelemetryEvent(e *api.TelemetryEvent) {
+	// Most of the event object needs to be reset to defaults before it is
+	// put into the pool for reuse.
+
+	e.Id = ""
+	e.ProcessId = ""
+	e.ProcessPid = 0
+	e.ContainerId = ""
+	e.SensorId = ""
+	e.SensorSequenceNumber = 0
+	e.SensorMonotimeNanos = 0
+	e.ProcessLineage = nil
+	e.ContainerName = ""
+	e.ImageId = ""
+	e.ImageName = ""
+	e.Event = nil
+	e.Cpu = 0
+	e.Credentials = nil
+
+	s.eventPool.Put(e)
+}
+
 func (s *Sensor) dispatchSample(eventID uint64, sample perf.EventMonitorSample) {
 	if sample.Err != nil {
 		glog.Warning(sample.Err)
@@ -193,10 +244,12 @@ func (s *Sensor) dispatchSample(eventID uint64, sample perf.EventMonitorSample) 
 
 	eventMap := s.eventMap.getMap()
 	subscriptions, ok := eventMap[eventID]
-	if !ok {
+	if !ok || len(subscriptions) == 0 {
+		s.discardTelemetryEvent(event)
 		return
 	}
 
+	recipients := make([]chan interface{}, 0, len(subscriptions))
 	for _, s := range subscriptions {
 		if s.data == nil {
 			continue
@@ -213,8 +266,20 @@ func (s *Sensor) dispatchSample(eventID uint64, sample perf.EventMonitorSample) 
 				continue
 			}
 		}
-		glog.V(2).Infof("Sending %+v", event)
-		s.data <- event
+		recipients = append(recipients, s.data)
+	}
+
+	if len(recipients) > 0 {
+		glog.V(2).Infof("Sending to %d recipient(s): %+v", len(recipients), event)
+		e := Event{
+			Event:    event,
+			reusable: len(recipients) == 1,
+		}
+		for _, r := range recipients {
+			r <- e
+		}
+	} else {
+		s.discardTelemetryEvent(event)
 	}
 }
 
@@ -273,27 +338,25 @@ func (s *Sensor) nextSequenceNumber() uint64 {
 // NewEvent creates a new API Event instance with common sensor-specific fields
 // correctly populated.
 func (s *Sensor) NewEvent() *api.TelemetryEvent {
-	monotime := s.currentMonotimeNanos()
-	sequenceNumber := s.nextSequenceNumber()
+	e := s.eventPool.Get().(*api.TelemetryEvent)
+	e.SensorId = s.ID
+	e.SensorMonotimeNanos = s.currentMonotimeNanos()
+	e.SensorSequenceNumber = s.nextSequenceNumber()
 
 	var b []byte
 	buf := bytes.NewBuffer(b)
+	buf.Grow(len(e.SensorId) + 16)
 
-	binary.Write(buf, binary.LittleEndian, s.ID)
-	binary.Write(buf, binary.LittleEndian, sequenceNumber)
-	binary.Write(buf, binary.LittleEndian, monotime)
+	binary.Write(buf, binary.LittleEndian, e.SensorId)
+	binary.Write(buf, binary.LittleEndian, e.SensorSequenceNumber)
+	binary.Write(buf, binary.LittleEndian, e.SensorMonotimeNanos)
 
 	h := sha256.Sum256(buf.Bytes())
-	eventID := hex.EncodeToString(h[:])
+	e.Id = hex.EncodeToString(h[:])
 
 	s.Metrics.Events++
 
-	return &api.TelemetryEvent{
-		Id:                   eventID,
-		SensorId:             s.ID,
-		SensorMonotimeNanos:  monotime,
-		SensorSequenceNumber: sequenceNumber,
-	}
+	return e
 }
 
 // NewEventFromContainer creates a new API Event instance using a specific
@@ -310,7 +373,6 @@ func (s *Sensor) NewEventFromSample(
 	sample *perf.SampleRecord,
 	data perf.TraceEventSampleData,
 ) *api.TelemetryEvent {
-
 	e := s.NewEvent()
 	e.SensorMonotimeNanos = int64(sample.Time) - s.bootMonotimeNanos
 

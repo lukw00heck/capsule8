@@ -537,7 +537,8 @@ func (c *containerFilter) addImageName(iname string) {
 }
 
 func (c *containerFilter) FilterFunc(i interface{}) bool {
-	e := i.(*api.TelemetryEvent)
+	event := i.(Event)
+	e := event.Event
 
 	//
 	// Fast path: Check if containerId is in containerIds map
@@ -580,7 +581,8 @@ func (c *containerFilter) FilterFunc(i interface{}) bool {
 }
 
 func (c *containerFilter) DoFunc(i interface{}) {
-	e := i.(*api.TelemetryEvent)
+	event := i.(Event)
+	e := event.Event
 
 	switch e.Event.(type) {
 	case *api.TelemetryEvent_Container:

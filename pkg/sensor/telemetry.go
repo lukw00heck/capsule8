@@ -176,14 +176,15 @@ func (t *telemetryServiceServer) GetEvents(req *api.GetEventsRequest, stream api
 
 sendLoop:
 	for {
-		ev, ok := <-eventStream.Data
+		event, ok := <-eventStream.Data
 		if !ok {
 			break sendLoop
 		}
+		ev := event.(Event)
 
 		// Send back events right away
 		te := &api.ReceivedTelemetryEvent{
-			Event: ev.(*api.TelemetryEvent),
+			Event: ev.Event,
 		}
 
 		err = stream.Send(&api.GetEventsResponse{
@@ -191,6 +192,7 @@ sendLoop:
 				te,
 			},
 		})
+		t.sensor.DiscardEvent(ev)
 		if err != nil {
 			break sendLoop
 		}
