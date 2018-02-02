@@ -185,6 +185,17 @@ func (c *mapTaskCache) SetTaskCommandLine(pid int, commandLine []string) {
 	}
 }
 
+// lookupLeader finds the task info for the thread group leader of the given pid
+func lookupLeader(cache taskCache, pid int) (task, bool) {
+	var t task
+
+	for p := pid; cache.LookupTask(p, &t) && t.pid != t.tgid; p = t.ppid {
+		// Do nothing
+	}
+
+	return t, t.pid == t.tgid
+}
+
 // ProcessInfoCache is an object that caches process information. It is
 // maintained automatically via an existing sensor object.
 type ProcessInfoCache struct {
@@ -273,22 +284,11 @@ func makeExecveFetchArgs(reg string) string {
 	return strings.Join(parts, " ")
 }
 
-// lookupLeader finds the task info for the thread group leader of the given pid
-func (pc *ProcessInfoCache) lookupLeader(pid int) (task, bool) {
-	var t task
-
-	for p := pid; pc.cache.LookupTask(p, &t) && t.pid != t.tgid; p = t.ppid {
-		// Do nothing
-	}
-
-	return t, t.pid == t.tgid
-}
-
 // ProcessID returns the unique ID for the thread group of the process
 // indicated by the given PID. This process ID is identical whether it
 // is derived inside or outside a container.
 func (pc *ProcessInfoCache) ProcessID(pid int) (string, bool) {
-	leader, ok := pc.lookupLeader(pid)
+	leader, ok := lookupLeader(pc.cache, pid)
 	if ok {
 		return proc.DeriveUniqueID(leader.pid, leader.ppid), true
 	}
@@ -299,10 +299,10 @@ func (pc *ProcessInfoCache) ProcessID(pid int) (string, bool) {
 // ProcessContainerID returns the container ID that the process
 // indicated by the given host PID.
 func (pc *ProcessInfoCache) ProcessContainerID(pid int) (string, bool) {
-	var t task
-	for p := pid; pc.cache.LookupTask(p, &t); p = t.ppid {
-		if len(t.containerID) > 0 {
-			return t.containerID, true
+	leader, ok := lookupLeader(pc.cache, pid)
+	if ok {
+		if len(leader.containerID) > 0 {
+			return leader.containerID, true
 		}
 	}
 
@@ -311,16 +311,17 @@ func (pc *ProcessInfoCache) ProcessContainerID(pid int) (string, bool) {
 
 // ProcessContainerInfo returns the container info for a process
 func (pc *ProcessInfoCache) ProcessContainerInfo(pid int) (*ContainerInfo, bool) {
-	var t task
-	for p := pid; pc.cache.LookupTask(p, &t); p = t.ppid {
-		if t.containerInfo != nil {
-			return t.containerInfo, true
+	leader, ok := lookupLeader(pc.cache, pid)
+	if ok {
+		if leader.containerInfo != nil {
+			return leader.containerInfo, true
 		}
-		if len(t.containerID) > 0 {
+
+		if len(leader.containerID) > 0 {
 			cc := pc.sensor.containerCache
-			t.containerInfo = cc.lookupContainer(t.containerID, true)
-			if t.containerInfo != nil {
-				return t.containerInfo, true
+			leader.containerInfo = cc.lookupContainer(leader.containerID, true)
+			if leader.containerInfo != nil {
+				return leader.containerInfo, true
 			}
 		}
 	}
