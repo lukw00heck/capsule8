@@ -19,10 +19,12 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -245,6 +247,117 @@ func containerIDFromCgroups(cgroups []Cgroup) string {
 	}
 
 	return ""
+}
+
+// ReadProcessStatus reads the status of a process from the proc filesystem,
+// parsing each field and storing it in the supplied struct.
+func (fs *FileSystem) ReadProcessStatus(tgid, pid int, i interface{}) error {
+	v := reflect.ValueOf(i)
+	if v.Kind() != reflect.Ptr {
+		return errors.New("Destination must be a pointer to struct")
+	}
+	v = v.Elem()
+	if v.Kind() != reflect.Struct {
+		return errors.New("Destination pointer must be to a struct")
+	}
+
+	var filename string
+	if tgid == pid {
+		filename = fmt.Sprintf("%d/status", tgid)
+	} else {
+		filename = fmt.Sprintf("%d/task/%d/status", tgid, pid)
+	}
+	f, err := fs.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		field := findFieldByTag(v, parts[0])
+		if !field.IsValid() {
+			continue
+		}
+
+		err = setValueFromString(field, parts[0],
+			strings.TrimSpace(parts[1]))
+		if err != nil {
+			return err
+		}
+	}
+	err = scanner.Err()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func findFieldByTag(v reflect.Value, name string) reflect.Value {
+	t := v.Type()
+	for i := t.NumField() - 1; i >= 0; i-- {
+		f := t.Field(i)
+		if f.Tag == reflect.StructTag(name) {
+			return v.Field(i)
+		}
+	}
+	return reflect.Value{}
+}
+
+func setValueFromString(v reflect.Value, name, s string) error {
+	switch v.Kind() {
+	case reflect.String:
+		v.SetString(s)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if x, err := strconv.ParseInt(s, 0, 64); err == nil {
+			v.SetInt(x)
+		} else {
+			return err
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32,
+		reflect.Uint64:
+		if x, err := strconv.ParseUint(s, 0, 64); err == nil {
+			v.SetUint(x)
+		} else {
+			return err
+		}
+	case reflect.Bool:
+		if x, err := strconv.ParseBool(s); err == nil {
+			v.SetBool(x)
+		} else {
+			return err
+		}
+	case reflect.Float32, reflect.Float64:
+		if x, err := strconv.ParseFloat(s, 64); err == nil {
+			v.SetFloat(x)
+		} else {
+			return err
+		}
+	case reflect.Slice:
+		if v.Type().Elem().Kind() == reflect.Slice {
+			return fmt.Errorf("Nested arrays are unsupported (%s)", name)
+		}
+		l := strings.Fields(s)
+		a := reflect.MakeSlice(v.Type(), len(l), len(l))
+		for i, x := range l {
+			n := fmt.Sprintf("%s[%d]", name, i)
+			if err := setValueFromString(a.Index(i), n, x); err != nil {
+				return err
+			}
+		}
+		v.Set(a)
+	default:
+		return fmt.Errorf("Cannot set field %s", name)
+	}
+
+	return nil
 }
 
 // UniqueID returns a reproducible namespace-independent

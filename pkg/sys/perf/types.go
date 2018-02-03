@@ -492,6 +492,18 @@ func (fr *ForkRecord) read(reader *bytes.Reader) error {
 	return nil
 }
 
+// ThrottleRecord is a translation of the structure used by the Linux kernel
+// for PERF_RECORD_THROTTLE and PERF_RECORD_UNTHROTTLE samples into Go.
+type ThrottleRecord struct {
+	Time     uint64
+	ID       uint64
+	StreamID uint64
+}
+
+func (tr *ThrottleRecord) read(reader *bytes.Reader) error {
+	return binary.Read(reader, binary.LittleEndian, tr)
+}
+
 // TraceEvent represents the common header on all trace events
 type TraceEvent struct {
 	Type         uint16
@@ -1032,6 +1044,32 @@ func (sample *Sample) read(reader *bytes.Reader, eventAttr *EventAttr, formatMap
 			break
 		}
 
+		fmt.Printf("***\n*** LOST %d RECORD(S) ***\n***\n", record.Lost)
+
+		sample.Record = record
+		err = sample.SampleID.maybeRead(reader, startPos, sample.eventHeader.Size, eventAttr, formatMap)
+
+	case PERF_RECORD_THROTTLE:
+		record := new(ThrottleRecord)
+		err = record.read(reader)
+		if err != nil {
+			break
+		}
+
+		fmt.Printf("***\n*** THROTTLED ***\n***\n")
+
+		sample.Record = record
+		err = sample.SampleID.maybeRead(reader, startPos, sample.eventHeader.Size, eventAttr, formatMap)
+
+	case PERF_RECORD_UNTHROTTLE:
+		record := new(ThrottleRecord)
+		err = record.read(reader)
+		if err != nil {
+			break
+		}
+
+		fmt.Printf("***\n*** UNTHROTTLED ***\n***\n")
+
 		sample.Record = record
 		err = sample.SampleID.maybeRead(reader, startPos, sample.eventHeader.Size, eventAttr, formatMap)
 
@@ -1040,6 +1078,7 @@ func (sample *Sample) read(reader *bytes.Reader, eventAttr *EventAttr, formatMap
 		// Unknown type, read sample record as a byte slice
 		//
 		recordSize := sample.Size - uint16(binary.Size(sample.eventHeader))
+		fmt.Printf("***\n*** UNRECOGNIZED RECORD TYPE %d ***\n***\n", sample.Type)
 
 		if eventAttr != nil {
 			sampleIDSize := sample.SampleID.getSize(eventAttr.SampleType, eventAttr.SampleIDAll)
