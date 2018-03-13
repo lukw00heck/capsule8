@@ -112,6 +112,10 @@ message EventFilter {
         // (for debugging)
         repeated ChargenEventFilter chargen_events = 100;
 
+	// Zero or more character generators to configure and return events from
+        // (for debugging)
+        repeated PerfHWCacheEventFilter perfHWCache_events = 102;
+
         // Zero or more ticker generators to configure and return events from
         // (for debugging)
         repeated TickerEventFilter ticker_events = 101;
@@ -277,6 +281,15 @@ message ChargenEventFilter {
         // Required; the length of character sequence strings to generate
         uint64 length = 1;
 }
+
+
+// The PerfHWCacheEventFilter configures a character stream generator and
+// includes events from it in the Subscription.
+message PerfHWCacheEventFilter {
+        // Required; the length of character sequence strings to generate
+        uint64 length = 1;
+}
+
 
 // The TickerEventFilter configures a ticker stream generator and
 // includes events from it in the Subscription.
