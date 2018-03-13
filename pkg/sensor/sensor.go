@@ -60,7 +60,8 @@ type Sensor struct {
 	Metrics MetricsCounters
 
 	// If temporary fs mounts are made at startup, they're stored here.
-	perfEventMountPoint string
+	
+perfEventMountPoint string
 	traceFSMountPoint   string
 
 	// A sensor-global event monitor that is used for events to aid in
@@ -468,6 +469,7 @@ func (s *Sensor) NewSubscription(
 	registerSyscallEvents(s, groupID, eventMap, sub.EventFilter.SyscallEvents)
 	registerChargenEvents(s, groupID, eventMap, sub.EventFilter.ChargenEvents)
 	registerTimerEvents(s, groupID, eventMap, sub.EventFilter.TickerEvents)
+	registerPerfHWCacheEvents(s, groupID, eventMap, sub.EventFilter.PerfHWCacheEvents)
 
 	if len(eventMap) == 0 {
 		return errors.New("Invalid subscription (no filters specified)")

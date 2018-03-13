@@ -32,8 +32,10 @@ func request_TelemetryService_GetEvents_0(ctx context.Context, marshaler runtime
 	var protoReq GetEventsRequest
 	var metadata runtime.ServerMetadata
 
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	if req.ContentLength > 0 {
+		if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 
 	stream, err := client.GetEvents(ctx, &protoReq)
