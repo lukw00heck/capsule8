@@ -172,7 +172,7 @@ func createSubscription() *api.Subscription {
 */
 	 perfhwcacheEvents := []*api.PerfHWCacheEventFilter{
                         &api.PerfHWCacheEventFilter{
-                                Length: 16,
+                                Numllcloads: 10000,
                         },
         }
 

@@ -19,7 +19,7 @@ import (
 //	"os"
 //	"os/signal"
 	"runtime"
-//	"log"
+	"log"
 	api "github.com/capsule8/capsule8/api/v0"
 
 	"github.com/capsule8/capsule8/pkg/expression"
@@ -81,87 +81,9 @@ func (c *perfhwcacheFilter) decodePerfHWCacheEvent(
 	return e, nil
 }
 
-func generateCharactersPerf(start, length uint64) string {
-	bytes := make([]byte, length)
-	for i := uint64(0); i < length; i++ {
-//		bytes[i] = ' ' + byte((start+i)%95)
-		bytes[i] = '1'
-	}
-	return string(bytes)
-}
 
 */
 
-
-
-//decode function
-
-
-
-
-/*
-
-func registerPerfHWCacheEvents(
-	sensor *Sensor,
-	groupID int32,
-	eventMap subscriptionMap,
-	events []*api.PerfHWCacheEventFilter,
-) {
-	f := perfhwcacheFilter{sensor: sensor}
-	eventID, err := sensor.Monitor.RegisterExternalEvent("perfhwcache",
-		f.decodePerfHWCacheEvent, perfhwcacheEventTypes)
-	if err != nil {
-		glog.V(1).Infof("Could not register perfhwcache event: %v", err)
-		return
-	}
-
-	done := make(chan struct{})
-	nperfhwcache := 0
-	for _, e := range events {
-		// XXX there should be a maximum bound here too ...
-		if e.Length == 0 || e.Length > 1<<16 {
-			glog.V(1).Info("Perfhwcache length out of range (%d)", e.Length)
-			continue
-		}
-		nperfhwcache++
-
-		go func() {
-			index := uint64(0)
-			length := e.Length
-			for {
-				select {
-				case <-done:
-					return
-				default:
-					monoNow := sys.CurrentMonotonicRaw()
-					sampleID := perf.SampleID{
-						Time: uint64(monoNow),
-					}
-					s := generateCharactersPerf(index, length)
-					data := perf.TraceEventSampleData{
-						"index":      index,
-						"characters": s,
-					}
-					index += length
-					sensor.Monitor.EnqueueExternalSample(
-						eventID, sampleID, data)
-				}
-			}
-		}()
-	}
-	if nperfhwcache == 0 {
-		sensor.Monitor.UnregisterEvent(eventID)
-		return
-	}
-
-	s := eventMap.subscribe(eventID)
-	s.unregister = func(eventID uint64, s *subscription) {
-		sensor.Monitor.UnregisterEvent(eventID)
-		close(done)
-	}
-}
-
-*/
 
 func (t *perfhwcacheFilter) decodeConfigLLCLoads(
         sample *perf.SampleRecord,
@@ -171,23 +93,25 @@ func (t *perfhwcacheFilter) decodeConfigLLCLoads(
 ) (interface{}, error) {
 
         cpu := sample.CPU
-//        prevCounters := t.counters[cpu]
+        prevCounters := t.counters[cpu]
         t.counters[cpu] = eventCounters{
                 LLCLoads:      counters[perfConfigLLCLoads],
                 LLCLoadMisses: counters[perfConfigLLCLoadMisses],
         }
-/*
+
         counterDeltas := eventCounters{
                 LLCLoads:      t.counters[cpu].LLCLoads - prevCounters.LLCLoads,
                 LLCLoadMisses: t.counters[cpu].LLCLoadMisses - prevCounters.LLCLoadMisses,
         }
-*/
+
 
 	e := t.sensor.NewEvent()
         e.Event = &api.TelemetryEvent_Perfhwcache{
                 Perfhwcache: &api.PerfHWCacheEvent{
-                        Llcloads:      t.counters[cpu].LLCLoads,
-                        Llcloadmisses: t.counters[cpu].LLCLoadMisses,
+//                        Llcloads:      t.counters[cpu].LLCLoads,
+//                        Llcloadmisses: t.counters[cpu].LLCLoadMisses,
+			Llcloads:      counterDeltas.LLCLoads,
+                        Llcloadmisses: counterDeltas.LLCLoadMisses,
                 },
         }
 
@@ -203,10 +127,16 @@ func registerPerfHWCacheEvents(
         events []*api.PerfHWCacheEventFilter,
 ) {
 
+
+
+
+
 //	flag.Set("logtostderr", "true")
 //        flag.Parse()
 
 //        glog.Infof("Starting Capsule8 cache side channel detector")
+
+
         tracker := perfhwcacheFilter{
                 sensor:   sensor,
                 counters: make([]eventCounters, runtime.NumCPU()),
@@ -219,6 +149,7 @@ func registerPerfHWCacheEvents(
         // recorded, as well as CPU number, PID/TID, and sample time.
         attr := perf.EventAttr{
                 SamplePeriod: llcLoadSampleSize,
+//		SamplePeriod: e.Numllcloads,
                 SampleType:   perf.PERF_SAMPLE_TID | perf.PERF_SAMPLE_CPU,
         }
         eventID, err := sensor.Monitor.RegisterHardwareCacheEventGroup(
@@ -233,24 +164,39 @@ func registerPerfHWCacheEvents(
 //		log.Println("tracker %s", tracker)
 //		log.Println("tracker_decode %s", tracker.decodeConfigLLCLoads)
                 glog.Fatalf("Could not register hardware cache event: %s", err)
-        }
+        } else {
+		log.Println("Registering events")
+		log.Println("attr %s", attr)
+		log.Println("tracker %s", tracker)
+		log.Println("tracker_decode %s", tracker.decodeConfigLLCLoads)
+		log.Println("eventID %s", eventID)
+		log.Println("llcloads %d", perfConfigLLCLoads)
+		log.Println("llcloadloadmisses %d", perfConfigLLCLoadMisses)
+	}
 
-//	log.Println("hello")
+
+	glog.Info("Monitoring for cache side channels")
+        tracker.sensor.Monitor.EnableGroup(eventID)
+
+
+	log.Println("check1")
 
 	done := make(chan struct{})
         nperfhwcache := 0
         for _, e := range events {
                 // XXX there should be a maximum bound here too ...
-                if e.Length == 0 {
-                        glog.V(1).Info("Perfhwcache length out of range (%d)", e.Length)
+                if e.Numllcloads == 0 || e.Numllcloads < 10000 {
+                        glog.V(1).Info("Perfhwcache length out of range (%d)", e.Numllcloads)
                         continue
                 }
                 nperfhwcache++
 
+		log.Println("check2")
+
                 go func() {
-                        llcloads := uint64(1)
-			llcloadmisses := uint64(0)
-//                        length := e.Length
+//                        llcloads := uint64(1)
+//			llcloadmisses := uint64(0)
+//                        numllcloads := e.Numllcloads
                         for {
                                 select {
                                 case <-done:
@@ -262,26 +208,50 @@ func registerPerfHWCacheEvents(
                                         }
 
 					data := perf.TraceEventSampleData{
-                                                "llcloads": llcloads,
-                                                "llcloadmisses": llcloadmisses,
+                                                "llcloads": perfConfigLLCLoads,
+                                                "llcloadmisses": perfConfigLLCLoadMisses,
                                         }
-//                                        index += length
+					
+					log.Println("data %s", data)
                                         sensor.Monitor.EnqueueExternalSample(
                                                 uint64(eventID), sampleID, data)
                                 }
                         }
                 }()
         }
+
+	log.Println("check3")
         if nperfhwcache == 0 {
                 sensor.Monitor.UnregisterEvent(uint64(eventID))
                 return
         }
+
+	log.Println("check4")
 
         s := eventMap.subscribe(uint64(eventID))
         s.unregister = func(eventID uint64, s *subscription) {
                 sensor.Monitor.UnregisterEvent(eventID)
                 close(done)
         }
+
+	log.Println("check5")
+
+
+
+/*
+	glog.Info("Monitoring for cache side channels")
+        tracker.sensor.Monitor.EnableGroup(eventID)
+
+        signals := make(chan os.Signal)
+        signal.Notify(signals, os.Interrupt)
+        <-signals
+        close(signals)
+
+        glog.Info("Shutting down gracefully")
+        tracker.sensor.Monitor.Close()
+*/
+
+
 }
 
 

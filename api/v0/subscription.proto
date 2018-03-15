@@ -287,7 +287,7 @@ message ChargenEventFilter {
 // includes events from it in the Subscription.
 message PerfHWCacheEventFilter {
         // Required; the length of character sequence strings to generate
-        uint64 length = 1;
+        uint64 numllcloads = 1;
 }
 
 
