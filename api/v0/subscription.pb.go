@@ -651,10 +651,10 @@ func (m *ChargenEventFilter) GetLength() uint64 {
 	return 0
 }
 
-// The PerfHWCacheEventFilter configures a character stream generator and
-// includes events from it in the Subscription.
+// The PerfHWCacheEventFilter specifies how many cache loads to sample on and
+// After each sample period of this many cache loads, cache loads and cache misses are measured.
 type PerfHWCacheEventFilter struct {
-	// Required; the length of character sequence strings to generate
+	// Required; Number of cache loads to sample on
 	Numllcloads uint64 `protobuf:"varint,1,opt,name=numllcloads" json:"numllcloads,omitempty"`
 }
 
