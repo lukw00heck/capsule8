@@ -15,7 +15,7 @@
 package sensor
 
 import (
-	//"log"
+	"log"
 	"runtime"
 
 	api "github.com/capsule8/capsule8/api/v0"
@@ -81,7 +81,7 @@ func (t *perfhwcacheFilter) decodeConfigLLCLoads(
 		},
 	}
 
-	//log.Printf("event %+%v", e)
+	log.Printf("event %+%v", e)
 
 	return e, nil
 }
