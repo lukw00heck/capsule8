@@ -134,7 +134,7 @@ func registerPerfHWCacheEvents(
 		if nperfhwcache == 0 {
 			sensor.Monitor.UnregisterEvent(uint64(eventID))
 		} else {
-			es := subscr.addEventSink(eventID)
+			es := subscr.addEventSink(uint64(eventID))
 			es.unregister = func(es *eventSink) {
 				sensor.Monitor.UnregisterEvent(es.eventID)
 				close(done)

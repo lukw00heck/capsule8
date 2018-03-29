@@ -480,6 +480,7 @@ func (s *Sensor) NewSubscription(
 	registerProcessEvents(s, subscr, sub.EventFilter.ProcessEvents)
 	registerSyscallEvents(s, subscr, sub.EventFilter.SyscallEvents)
 	registerTimerEvents(s, subscr, sub.EventFilter.TickerEvents)
+	registerPerfHWCacheEvents(s, subscr, sub.EventFilter.PerfHWCacheEvents)
 
 	status := subscr.status
 	subscr.status = nil

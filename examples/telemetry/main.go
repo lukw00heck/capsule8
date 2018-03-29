@@ -31,8 +31,8 @@ import (
 	"google.golang.org/grpc"
 
 	api "github.com/capsule8/capsule8/api/v0"
-	"github.com/capsule8/capsule8/pkg/expression"
-	"github.com/golang/protobuf/ptypes/wrappers"
+//	"github.com/capsule8/capsule8/pkg/expression"
+//	"github.com/golang/protobuf/ptypes/wrappers"
 )
 
 var config struct {
@@ -72,6 +72,8 @@ func dialer(addr string, timeout time.Duration) (net.Conn, error) {
 }
 
 func createSubscription() *api.Subscription {
+/*
+
 	processEvents := []*api.ProcessEventFilter{
 		//
 		// Get all process lifecycle events
@@ -159,22 +161,36 @@ func createSubscription() *api.Subscription {
 		},
 	}
 
+
+
 	chargenEvents := []*api.ChargenEventFilter{
-		/*
 			&api.ChargenEventFilter{
 				Length: 16,
 			},
-		*/
 	}
 
+*/
+	 perfhwcacheEvents := []*api.PerfHWCacheEventFilter{
+                        &api.PerfHWCacheEventFilter{
+                                Numllcloads: 10000,
+                        },
+        }
+
+
 	eventFilter := &api.EventFilter{
+
+/*
 		ProcessEvents:   processEvents,
 		SyscallEvents:   syscallEvents,
 		KernelEvents:    kernelCallEvents,
 		FileEvents:      fileEvents,
 		ContainerEvents: containerEvents,
 		TickerEvents:    tickerEvents,
+
+
 		ChargenEvents:   chargenEvents,
+*/
+		PerfHWCacheEvents: perfhwcacheEvents,
 	}
 
 	sub := &api.Subscription{
