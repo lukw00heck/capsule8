@@ -112,6 +112,10 @@ message EventFilter {
         // (for debugging)
         repeated ChargenEventFilter chargen_events = 100;
 
+	// Zero or more character generators to configure and return events from
+        // (for debugging)
+        repeated PerfHWCacheEventFilter perfHWCache_events = 102;
+
         // Zero or more ticker generators to configure and return events from
         // (for debugging)
         repeated TickerEventFilter ticker_events = 101;
@@ -276,6 +280,13 @@ message ContainerEventFilter {
 message ChargenEventFilter {
         // Required; the length of character sequence strings to generate
         uint64 length = 1;
+}
+
+// The PerfHWCacheEventFilter specifies how many cache loads to sample on and
+// After each sample period of this many cache loads, cache loads and cache misses are measured.
+message PerfHWCacheEventFilter {
+        // Required; Number of cache loads to sample on
+        uint64 numllcloads = 1;
 }
 
 // The TickerEventFilter configures a ticker stream generator and

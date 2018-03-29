@@ -20,6 +20,7 @@ It has these top-level messages:
 	Credentials
 	TelemetryEvent
 	ChargenEvent
+	PerfHWCacheEvent
 	TickerEvent
 	ContainerEvent
 	ProcessEvent
@@ -41,6 +42,7 @@ It has these top-level messages:
 	NetworkEventFilter
 	ContainerEventFilter
 	ChargenEventFilter
+	PerfHWCacheEventFilter
 	TickerEventFilter
 	Modifier
 	ThrottleModifier
